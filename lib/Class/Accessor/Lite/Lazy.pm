@@ -5,7 +5,7 @@ use 5.008_001;
 use parent 'Class::Accessor::Lite';
 use Carp ();
 
-our $VERSION = '0.02';
+our $VERSION = '0.03';
 
 my %key_ctor = (
     ro_lazy => \&_mk_ro_lazy_accessors,
@@ -17,8 +17,9 @@ sub import {
     my $pkg = caller;
     foreach my $key (sort keys %key_ctor) {
         if (defined (my $value = delete $args{$key})) {
-            Carp::croak "value of the '$key' parameter should be an arrayref"
-                unless ref($value) eq 'ARRAY';
+            Carp::croak "value of the '$key' parameter should be an arrayref or hashref"
+                unless ref($value) =~ /^(ARRAY|HASH)$/;
+            $value = [ $value ] if ref $value eq 'HASH';
             $key_ctor{$key}->($pkg, @$value);
         }
     }
@@ -98,11 +99,30 @@ Class::Accessor::Lite::Lazy - Class::Accessor::Lite with lazy accessor feature
   package MyPackage;
 
   use Class::Accessor::Lite::Lazy (
-      rw_lazy => [ qw(foo) ],
+      rw_lazy => [
+        # implicit builder method name is "_build_foo"
+        qw(foo foo2),
+        # or specify builder explicitly
+        {
+          xxx => 'method_name',
+          yyy => sub {
+            my $self = shift;
+            ...
+          },
+        }
+      ],
       ro_lazy => [ qw(bar) ],
       # Class::Accessor::Lite functionality is also available
       new => 1,
       rw  => [ qw(baz) ],
+  );
+
+  # or if you specify all attributes' builders explicitly
+  use Class::Accessor::Lite::Lazy (
+      rw_lazy => {
+        foo => '_build_foo',
+        bar => \&_build_bar,
+      }
   );
 
   sub _build_foo {
@@ -120,7 +140,6 @@ Class::Accessor::Lite::Lazy - Class::Accessor::Lite with lazy accessor feature
 Class::Accessor::Lite::Lazy provides a "lazy" accessor feature to L<Class::Accessor::Lite>.
 
 If a lazy accessor without any value set is called, a builder method is called to generate a value to set.
-The builder for an accessor I<$attr> should be named as _build_I<$attr>.
 
 =head1 THE USE STATEMENT
 
@@ -128,11 +147,11 @@ As L<Class::Accessor::Lite>, the use statement provides the way to create lazy a
 
 =over 4
 
-=item rw_lazy => \@name_of_the_properties
+=item rw_lazy => \@name_of_the_properties | \%properties_and_builders
 
 Creates read / write lazy accessors.
 
-=item ro_lazy => \@name_of_the_properties
+=item ro_lazy => \@name_of_the_properties | \%properties_and_builders
 
 Creates read-only lazy accessors.
 
@@ -146,15 +165,24 @@ Same as L<Class::Accessor::Lite>.
 
 =over 4
 
-=item Class::Accessor::Lite::Lazy->mk_lazy_accessors(@name_of_the_properties);
+=item C<< Class::Accessor::Lite::Lazy->mk_lazy_accessors(@name_of_the_properties) >>
 
 Creates lazy accessors in current package.
 
-=item Class::Accessor::Lite::Lazy->mk_ro_lazy_accessors(@name_of_the_properties);
+=item C<< Class::Accessor::Lite::Lazy->mk_ro_lazy_accessors(@name_of_the_properties) >>
 
 Creates read-only lazy accessors in current package.
 
 =back
+
+=head1 SPECIFYING BUILDERS
+
+As seen in SYNOPSIS, each attribute is specified by either a string or a hashref.
+
+In the string form C<< $attr >> you specify builders implicitly, the builder method name for the attribute I<$attr> is named _build_I<$attr>.
+
+In the hashref form C<< { $attr => $method_name | \&builder } >> you can explicitly specify builders, each key is the attribute name and each value is
+either a string which specifies the builder method name or a coderef itself.
 
 =head1 AUTHOR
 
